@@ -1,0 +1,98 @@
+---
+title: "Main"
+author: "Saeid Abolfazli (PhD), Zohreh Sanaei (PhD)"
+date: "May 15, 2016"
+output: pdf_document
+---
+```{r}
+file <- file.path("data","claimsData.csv")
+claims <- read.csv(file)
+
+```
+no split the data into train and test.
+
+```{r}
+library(lubripack)
+lubripack("caTools")
+set.seed(88)
+train <- claims[sample.split(claims$bucket2009, SplitRatio =  0.6),]
+test <- claims[!sample.split(claims$bucket2009, SplitRatio =  0.6),]
+
+```
+What is the average age of patients in the training set, ClaimsTrain?
+
+```{r}
+mean(train$age)
+```
+
+What proportion of people in the training set had at least one diagnosis code for diabetes?
+
+```{r}
+table(train$diabetes)[2]/nrow(train)
+```
+
+
+Suppose that instead of the baseline method discussed in the previous video, we used the baseline method of predicting the most frequent outcome for all observations. This new baseline method would predict cost bucket 1 for everyone.
+
+What would the accuracy of this baseline method be on the test set?
+
+```{r}
+table(test$bucket2009,rep(1,nrow(test)))
+122978/nrow(test)
+```
+
+What would the penalty error of this baseline method be on the test set?
+
+
+```{r}
+PenaltyMatrix <- matrix(c(0,1,2,3,4,
+                        2,0,1,2,3,
+                        4,2,0,1,2,
+                        6,4,2,0,1,
+                        8,6,4,2,0), nrow=5,ncol=5, byrow = TRUE)
+PenaltyMatrix
+
+penaltyError <- (2*34840 + 4*16390 + 6*7937 + 8*1057)/nrow(test)
+
+```
+
+# Build model
+
+```{r}
+lubripack("rpart","rpart.plot")
+claimsModel <- rpart(bucket2009~ age + alzheimers +arthritis + cancer + copd + depression + diabetes + heart.failure + ihd + kidney + osteoporosis + stroke + bucket2008  +  reimbursement2008, data=train, method="class",cp=0.00005)
+prp(claimsModel)
+
+Pred <- predict(claimsModel, newdata= test, type = "class")
+
+table(test$bucket2009, Pred)
+
+(114602+ 16209 + 132+350)/nrow(test)
+
+sum(as.matrix(table(test$bucket2009, Pred))*PenaltyMatrix)/nrow(test)
+
+```
+
+The problem using abolve model is that the penalty error is quite high (75%) as accuracy of model is improved. We can lower down the error by feeding the penalty matrix into rpart. We can tell rpart that inadequate prediction costs penalty using our penalty matrix. So the model watches out when deciding on the values.
+
+
+#Calculate CP (Complexity Parameter)
+'''{r}
+lubripack("caret","e1071")
+```
+
+```{r}
+claimsLossyModel <- rpart(bucket2009~ age + alzheimers +arthritis + cancer + copd + depression + diabetes + heart.failure + ihd + kidney + osteoporosis + stroke + bucket2008  +  reimbursement2008, data=train, method="class",cp=0.00005, parms = list(loss=PenaltyMatrix))
+
+LossyPred <- predict(claimsLossyModel, newdata= test, type = "class")
+
+table(test$bucket2009, LossyPred)
+
+(93322+ 19959 + 4684+511)/nrow(test)
+
+sum(as.matrix(table(test$bucket2009, LossyPred))*PenaltyMatrix)/nrow(test)
+
+```
+
+
+
